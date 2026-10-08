@@ -1,0 +1,35 @@
+# =============================================================================
+# AUTOSAR HLD AI Assistant — Requirements
+# =============================================================================
+# Install: pip install -r requirements.txt
+# Python: 3.10+
+# =============================================================================
+
+# ── Web UI ────────────────────────────────────────────────────────────────────
+streamlit>=1.35.0
+
+# ── PDF parsing (PyMuPDF) ─────────────────────────────────────────────────────
+PyMuPDF>=1.24.0
+
+# ── Local embeddings (downloads ~130 MB model on first use) ──────────────────
+sentence-transformers>=2.7.0
+
+# ── Vector search (local FAISS, CPU-only) ────────────────────────────────────
+faiss-cpu>=1.8.0
+
+# ── HTTP client (for Ollama REST API) ────────────────────────────────────────
+requests>=2.31.0
+
+# ── OpenAI client (optional — only needed for LLM_PROVIDER=openai) ───────────
+openai>=1.30.0
+
+# ── Environment and utilities ─────────────────────────────────────────────────
+python-dotenv>=1.0.0
+pandas>=2.0.0
+numpy>=1.26.0
+
+# ── PDF generation (for synthetic demo HLD) ───────────────────────────────────
+reportlab>=4.1.0
+
+# ── Testing ──────────────────────────────────────────────────────────────────
+pytest>=7.4.0

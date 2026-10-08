@@ -1,0 +1,81 @@
+# ── Secrets ───────────────────────────────────────────────────────────────────
+.env
+# Allow the example template
+!.env.example
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+env/
+.venv/
+.env/
+ENV/
+
+# ── Test / build artifacts ────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# ── IDE / editor ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+*~
+
+# ── Generated project data (not source code) ──────────────────────────────────
+# FAISS indices — regenerated from the PDF on first run
+vector_store/*/index.faiss
+vector_store/*/metadata.pkl
+vector_store/*/config.json
+# Keep the directory itself (for structure)
+!vector_store/.gitkeep
+
+# Uploaded / generated PDFs
+data/input/*.pdf
+data/input/*.txt
+!data/input/.gitkeep
+
+# Processed data
+data/processed/
+!data/processed/.gitkeep
+
+# Evaluation outputs
+evaluation_results/*.json
+!evaluation_results/.gitkeep
+
+# Prompts overrides (keep the directory, ignore user customisations)
+prompts/*.txt
+!prompts/.gitkeep
+
+# ── OS-specific ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Temp / scratch ────────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.bak
+test_vector.py
+
+# ── HuggingFace model cache (not in project root normally) ───────────────────
+.cache/
+
+# ── Jupyter ──────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
