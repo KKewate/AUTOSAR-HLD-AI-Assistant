@@ -8,7 +8,10 @@ import re
 from pathlib import Path
 from typing import List, Dict, Any
 
-import fitz  # PyMuPDF
+try:
+    import pymupdf as fitz  # PyMuPDF >= 1.24.3 (no deprecation warning)
+except ImportError:  # pragma: no cover
+    import fitz  # type: ignore
 
 
 # ── Section heading detection ──────────────────────────────────────────────────
@@ -26,7 +29,8 @@ def _detect_heading(text: str, font_size: float, flags: int) -> str | None:
     is_bold = bool(flags & 2**4)
     is_large = font_size >= 13
     stripped = text.strip()
-    if (is_bold or is_large) and 4 <= len(stripped) <= 100:
+    if (is_bold or is_large) and 4 <= len(stripped) <= 100 \
+            and not stripped.endswith((":", ",", ";")):
         return stripped
     m = _HEADING_RE.match(stripped)
     if m:
@@ -40,53 +44,57 @@ def extract_pages(pdf_path: Path) -> List[Dict[str, Any]]:
 
     Returns a list of dicts:
         {
-          "page":    int (1-indexed),
-          "text":    str,
-          "heading": str | None   (best candidate heading for the page),
+          "page":     int (1-indexed),
+          "text":     str,
+          "heading":  str | None   (heading in effect at the start of the page,
+                                    else the first heading on it),
+          "sections": list[(char_offset, heading)]  (headings inside the page text),
           "char_count": int,
           "is_scanned": bool,
         }
     """
-    doc = fitz.open(str(pdf_path))
     pages: List[Dict[str, Any]] = []
-
     current_heading: str | None = None
 
-    for page_num, page in enumerate(doc, start=1):
-        blocks = page.get_text("dict")["blocks"]
-        page_text_parts: List[str] = []
-        page_heading_candidate: str | None = None
+    with fitz.open(str(pdf_path)) as doc:
+        for page_num, page in enumerate(doc, start=1):
+            blocks = page.get_text("dict")["blocks"]
+            lines_out: List[str] = []
+            sections: List[tuple] = []
+            offset = 0
+            heading_at_start = current_heading
 
-        for block in blocks:
-            if block.get("type") != 0:          # skip image blocks
-                continue
-            for line in block.get("lines", []):
-                for span in line.get("spans", []):
-                    txt = span.get("text", "").strip()
-                    if not txt:
+            for block in blocks:
+                if block.get("type") != 0:          # skip image blocks
+                    continue
+                for line in block.get("lines", []):
+                    spans = [sp for sp in line.get("spans", []) if sp.get("text", "").strip()]
+                    if not spans:
                         continue
-                    font_size = span.get("size", 11)
-                    flags     = span.get("flags", 0)
-                    h = _detect_heading(txt, font_size, flags)
-                    if h and page_heading_candidate is None:
-                        page_heading_candidate = h
+                    # Join the spans of one visual line with spaces (not newlines)
+                    line_text = " ".join(sp["text"].strip() for sp in spans)
+                    # Heading decision is made on the whole line, using its first span
+                    h = _detect_heading(line_text, spans[0].get("size", 11), spans[0].get("flags", 0))
+                    if h:
                         current_heading = h
-                    page_text_parts.append(txt)
+                        sections.append((offset, h))
+                    lines_out.append(line_text)
+                    offset += len(line_text) + 1
 
-        raw_text = "\n".join(page_text_parts).strip()
-        is_scanned = len(raw_text) < 50 and len(blocks) > 0
+            raw_text = "\n".join(lines_out).strip()
+            is_scanned = len(raw_text) < 50 and len(blocks) > 0
 
-        pages.append(
-            {
-                "page":       page_num,
-                "text":       raw_text,
-                "heading":    page_heading_candidate or current_heading,
-                "char_count": len(raw_text),
-                "is_scanned": is_scanned,
-            }
-        )
+            pages.append(
+                {
+                    "page":       page_num,
+                    "text":       raw_text,
+                    "heading":    heading_at_start or (sections[0][1] if sections else None),
+                    "sections":   sections,
+                    "char_count": len(raw_text),
+                    "is_scanned": is_scanned,
+                }
+            )
 
-    doc.close()
     return pages
 
 

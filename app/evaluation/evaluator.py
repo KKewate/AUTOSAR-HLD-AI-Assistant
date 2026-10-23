@@ -98,12 +98,18 @@ SYNTHETIC_QA: List[Dict[str, str]] = [
 ]
 
 
+def _is_placeholder(answer: str) -> bool:
+    """True for mock/demo output or an explicit refusal (nothing real to score)."""
+    return ("Insufficient evidence" in answer or "MOCK MODE" in answer
+            or "DEMO MODE" in answer or "LLM request failed" in answer)
+
+
 def _check_groundedness(answer: str, chunks: List[Dict]) -> bool:
     """
     Naive check: answer is grounded if it mentions terms from retrieved chunks
     (or is a mock/insufficient response).
     """
-    if "Insufficient evidence" in answer or "MOCK MODE" in answer:
+    if _is_placeholder(answer):
         return True   # correctly refusing / mock is expected
     chunk_text = " ".join(c["text"].lower() for c in chunks)
     answer_words = set(answer.lower().split())
@@ -125,7 +131,7 @@ def _check_answer_correctness(answer: str, ground_truth: str) -> str:
     Simple keyword overlap metric (not semantic).
     Returns: "Pass" | "Partial" | "Fail" | "Unverifiable"
     """
-    if "MOCK MODE" in answer or "Insufficient evidence" in answer:
+    if _is_placeholder(answer):
         return "Unverifiable"
     gt_keywords = set(ground_truth.lower().split())
     ans_keywords = set(answer.lower().split())

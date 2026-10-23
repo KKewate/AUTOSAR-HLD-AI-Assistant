@@ -11,7 +11,7 @@ import re
 from typing import List, Dict, Any
 
 from app.rag.vector_store import VectorStore
-from app.rag.llm_client   import llm_answer, get_llm
+from app.rag.llm_client   import llm_answer, is_mock_mode
 
 
 # ── Extraction prompts ─────────────────────────────────────────────────────────
@@ -115,16 +115,29 @@ def extract_architecture(store: VectorStore) -> Dict[str, Any]:
         citations.append(f"{c['doc_name']} — Page {c['page']}{s}")
 
     # Ask LLM
+    if is_mock_mode():
+        empty["citations"] = list(dict.fromkeys(citations))
+        empty["error"] = ("Architecture extraction needs a real LLM (demo/mock mode is active). "
+                          "Set LLM_PROVIDER=ollama or openai in .env.")
+        return empty
+
     raw = llm_answer(_EXTRACT_PROMPT, all_chunks, extra_instruction="")
     parsed = _safe_json_parse(raw, {})
+    if not isinstance(parsed, dict):
+        parsed = {}
+
+    def _as_list(v):
+        if not isinstance(v, list):
+            return []
+        return [x if isinstance(x, str) else json.dumps(x, ensure_ascii=False) for x in v]
 
     return {
-        "components":       parsed.get("components", []),
-        "interfaces":       parsed.get("interfaces", []),
-        "ports":            parsed.get("ports", []),
-        "signals":          parsed.get("signals", []),
-        "dependencies":     parsed.get("dependencies", []),
-        "functional_flows": parsed.get("functional_flows", []),
+        "components":       _as_list(parsed.get("components")),
+        "interfaces":       _as_list(parsed.get("interfaces")),
+        "ports":            _as_list(parsed.get("ports")),
+        "signals":          _as_list(parsed.get("signals")),
+        "dependencies":     _as_list(parsed.get("dependencies")),
+        "functional_flows": _as_list(parsed.get("functional_flows")),
         "citations":        list(dict.fromkeys(citations)),
         "error":            None,
     }
@@ -152,15 +165,25 @@ def detect_inconsistencies(store: VectorStore) -> List[Dict[str, Any]]:
                 all_chunks.append(c)
                 seen_ids.add(c["chunk_id"])
 
-    if not all_chunks:
+    if not all_chunks or is_mock_mode():
         return []
 
     raw = llm_answer(_INCONSISTENCY_PROMPT, all_chunks)
     parsed = _safe_json_parse(raw, [])
 
-    if isinstance(parsed, list):
-        return parsed
-    return []
+    if not isinstance(parsed, list):
+        return []
+    findings = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        ev = item.get("evidence", [])
+        item["evidence"] = [ev] if isinstance(ev, str) else [str(e) for e in ev] if isinstance(ev, list) else []
+        item["finding"] = str(item.get("finding", "")) or "Finding"
+        if item.get("severity") not in ("High", "Medium", "Low"):
+            item["severity"] = "Low"
+        findings.append(item)
+    return findings
 
 
 def generate_summary(store: VectorStore, arch: Dict[str, Any]) -> str:
@@ -169,6 +192,9 @@ def generate_summary(store: VectorStore, arch: Dict[str, Any]) -> str:
     """
     if not store.is_ready:
         return "No documents processed yet."
+    if is_mock_mode():
+        return ("_Summary generation needs a real LLM (demo/mock mode is active). "
+                "Set `LLM_PROVIDER=ollama` or `openai` in `.env`._")
 
     # Pull high-level chunks
     chunks = store.search("architecture overview summary components interfaces", top_k=8)

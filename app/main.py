@@ -385,8 +385,8 @@ if process_btn:
 
     if uploaded_files and not use_demo:
         for uf in uploaded_files:
-            save_path = DATA_INPUT_DIR / uf.name
-            save_path.write_bytes(uf.read())
+            save_path = DATA_INPUT_DIR / Path(uf.name).name   # strip any path components
+            save_path.write_bytes(uf.getvalue())
             pdf_paths.append(save_path)
 
     if not pdf_paths:
@@ -415,7 +415,8 @@ if process_btn:
             stats["doc_name"] = pdf_path.name
             doc_stats_list.append(stats)
 
-            chunks = chunk_pages(pages, doc_name=pdf_path.name, chunk_size=int(chunk_size))
+            chunks = chunk_pages(pages, doc_name=pdf_path.name, chunk_size=int(chunk_size),
+                                 chunk_overlap=min(100, int(chunk_size) // 4))
             all_chunks.extend(chunks)
             progress.progress((i + 1) / len(pdf_paths), text=f"Chunked: {pdf_path.name}")
 
@@ -737,10 +738,10 @@ with tab_eval:
 
             # Correctness breakdown bar
             st.markdown("##### 🎯 Answer Correctness Breakdown")
-            pass_c    = int(metrics["answer_pass_rate"]    * len(results))
-            partial_c = int(metrics["answer_partial_rate"] * len(results))
-            fail_c    = int(metrics["answer_fail_rate"]    * len(results))
-            unv_c     = int(metrics["unverifiable_rate"]   * len(results))
+            pass_c    = round(metrics["answer_pass_rate"]    * len(results))
+            partial_c = round(metrics["answer_partial_rate"] * len(results))
+            fail_c    = round(metrics["answer_fail_rate"]    * len(results))
+            unv_c     = round(metrics["unverifiable_rate"]   * len(results))
 
             col_p, col_pa, col_f, col_u = st.columns(4)
             col_p.metric( "✅ Pass",          pass_c)

@@ -54,6 +54,17 @@ class VectorStore:
         idx_path  = self.store_path / self.INDEX_FILE
         meta_path = self.store_path / self.META_FILE
         if idx_path.exists() and meta_path.exists():
+            cfg_path = self.store_path / self.CONFIG_FILE
+            if cfg_path.exists():
+                try:
+                    saved = json.loads(cfg_path.read_text()).get("model_name")
+                except Exception:
+                    saved = None
+                if saved and saved != self.model_name:
+                    # Index was built with a different embedding model: dimensions/space
+                    # would not match, so discard it and force a rebuild.
+                    self.reset()
+                    return
             self._index    = faiss.read_index(str(idx_path))
             with open(meta_path, "rb") as f:
                 self._metadata = pickle.load(f)
@@ -68,6 +79,8 @@ class VectorStore:
     # ── Build / Add ────────────────────────────────────────────────────────────
     def add_chunks(self, chunks: List[Dict[str, Any]], show_progress: bool = True):
         """Embed *chunks* and add to the FAISS index."""
+        if not chunks:
+            return
         texts = [c["text"] for c in chunks]
         embeddings = self.model.encode(
             texts,

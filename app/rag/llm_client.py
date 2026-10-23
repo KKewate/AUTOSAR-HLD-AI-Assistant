@@ -48,7 +48,7 @@ class _MockLLM:
             page_hint = f"Page {match.group(1)}"
 
         # Count how many evidence chunks were retrieved
-        chunk_count = ctx_block.count("[") 
+        chunk_count = len(re.findall(r"^\[\d+\] Source:", ctx_block, re.MULTILINE))
 
         return (
             f"**[DEMO MODE — No LLM configured]**\n\n"
@@ -131,13 +131,19 @@ class _OpenAILLM:
             raise RuntimeError("openai package not installed. Run: pip install openai")
 
     def chat(self, messages: List[Dict[str, str]]) -> str:
-        resp = self._client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=messages,
-            temperature=TEMPERATURE,
-            max_tokens=MAX_TOKENS,
-        )
-        return resp.choices[0].message.content.strip()
+        kwargs = dict(model=LLM_MODEL, messages=messages, temperature=TEMPERATURE)
+        try:
+            resp = self._client.chat.completions.create(max_tokens=MAX_TOKENS, **kwargs)
+        except Exception as e:
+            # Newer OpenAI models reject max_tokens and/or custom temperature.
+            msg = str(e)
+            if "max_completion_tokens" in msg or "temperature" in msg:
+                kwargs.pop("temperature", None)
+                resp = self._client.chat.completions.create(
+                    max_completion_tokens=MAX_TOKENS, **kwargs)
+            else:
+                raise
+        return (resp.choices[0].message.content or "").strip()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -148,7 +154,7 @@ def _build_llm():
     Build the LLM based on LLM_PROVIDER environment variable.
     Falls back to Mock on any error so the app never crashes.
     """
-    provider = LLM_PROVIDER.strip().lower()
+    provider = LLM_PROVIDER
 
     if provider == "ollama":
         try:
@@ -262,4 +268,7 @@ def llm_answer(
         {"role": "user",   "content": question},
     ]
 
-    return get_llm().chat(messages)
+    try:
+        return get_llm().chat(messages)
+    except Exception as e:   # network/timeout/auth errors must not crash the app
+        return f"**LLM request failed** ({type(e).__name__}): {e}"

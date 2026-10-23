@@ -3,23 +3,52 @@ Text Chunker — splits pages into overlapping chunks while preserving metadata.
 """
 
 from __future__ import annotations
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 import uuid
 
 from config.settings import CHUNK_SIZE, CHUNK_OVERLAP
 
 
-def _split_text(text: str, size: int, overlap: int) -> List[str]:
-    """Simple character-level sliding-window splitter."""
-    chunks: List[str] = []
+def _split_text(text: str, size: int, overlap: int) -> List[Tuple[int, str]]:
+    """
+    Sliding-window splitter. Returns (start_offset, chunk_text) pairs.
+    Prefers to break on a newline/space near the window end so words are not cut.
+    """
+    if size <= 0:
+        raise ValueError("chunk size must be positive")
+    overlap = max(0, min(overlap, size - 1))   # overlap >= size would never advance
+    chunks: List[Tuple[int, str]] = []
     start = 0
-    while start < len(text):
-        end = min(start + size, len(text))
-        chunks.append(text[start:end].strip())
-        if end == len(text):
+    n = len(text)
+    while start < n:
+        end = min(start + size, n)
+        if end < n:
+            window_floor = start + size // 2
+            cut = max(text.rfind("\n", window_floor, end), text.rfind(" ", window_floor, end))
+            if cut > start:
+                end = cut
+        piece = text[start:end].strip()
+        if piece:
+            chunks.append((start, piece))
+        if end >= n:
             break
-        start += size - overlap
-    return [c for c in chunks if c]
+        nxt = max(end - overlap, start + 1)
+        # snap forward to the next word boundary so a chunk never starts mid-word
+        while 0 < nxt < n and not text[nxt - 1].isspace() and nxt < end:
+            nxt += 1
+        start = nxt
+    return chunks
+
+
+def _heading_for_offset(page: Dict[str, Any], offset: int):
+    """Heading in effect at *offset* inside the page text."""
+    heading = page.get("heading")
+    for off, h in page.get("sections", []) or []:
+        if off <= offset:
+            heading = h
+        else:
+            break
+    return heading
 
 
 def chunk_pages(
@@ -45,14 +74,13 @@ def chunk_pages(
         text = page["text"]
         if not text:
             continue
-        sub_chunks = _split_text(text, chunk_size, chunk_overlap)
-        for chunk_text in sub_chunks:
+        for start_off, chunk_text in _split_text(text, chunk_size, chunk_overlap):
             all_chunks.append(
                 {
                     "chunk_id":   str(uuid.uuid4()),
                     "doc_name":   doc_name,
                     "page":       page["page"],
-                    "heading":    page.get("heading"),
+                    "heading":    _heading_for_offset(page, start_off),
                     "text":       chunk_text,
                     "char_count": len(chunk_text),
                 }

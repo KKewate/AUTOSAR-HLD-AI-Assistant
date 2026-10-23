@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")   # independent of the current working directory
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 BASE_DIR        = Path(__file__).resolve().parent.parent
@@ -26,11 +26,13 @@ for _d in [DATA_INPUT_DIR, DATA_PROC_DIR, VECTOR_STORE_DIR, EVAL_RESULTS_DIR, PR
 # - ollama:  requires Ollama running locally (no API key needed)
 # - mock:    no external service needed (demo/offline mode)
 LLM_PROVIDER    = os.getenv("LLM_PROVIDER", "mock")   # default mock so app runs without setup
-LLM_MODEL       = os.getenv("LLM_MODEL", "llama3.1")  # used for ollama; or gpt-4o-mini for openai
+LLM_PROVIDER   = LLM_PROVIDER.strip().lower()
+# Provider-aware default: "llama3.1" is not a valid OpenAI model name.
+LLM_MODEL       = os.getenv("LLM_MODEL") or ("gpt-4o-mini" if LLM_PROVIDER == "openai" else "llama3.1")
 OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY", "")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-TEMPERATURE     = float(os.getenv("TEMPERATURE", "0.1"))
-MAX_TOKENS      = int(os.getenv("MAX_TOKENS", "1500"))
+TEMPERATURE     = float(os.getenv("TEMPERATURE") or "0.1")
+MAX_TOKENS      = int(os.getenv("MAX_TOKENS") or "1500")
 
 # ── Embeddings ────────────────────────────────────────────────────────────────
 EMBEDDING_MODEL = os.getenv(
